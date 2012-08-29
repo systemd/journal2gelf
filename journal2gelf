@@ -1,0 +1,149 @@
+#!/usr/bin/python -u
+#
+# journal2gelf
+# ============
+#
+# Get structured log records from the systemd journal and send them to a
+# Graylog2 server as GELF messages.
+#
+# Tested on Python 2.7, may work on other versions.
+#
+# Dependencies:
+# -------------
+# - graypy (pip-install graypy)
+#
+# Usage:
+# ------
+#
+# - Send all logs and exit:
+#   `systemd-journalctl -o json | journal2gelf.py`
+#
+# - To tail the journal and send logs:
+#   `systemd-journalctl -o json -f | journal2gelf.py`
+#
+# Copyright 2012 Joe Miller <https://github.com/joemiller>
+#
+# Released under the MIT license, see LICENSE for details.
+#
+
+import sys
+import json
+import zlib
+import graypy
+
+from collections import deque
+
+# TODO:
+# x convert time properly for gelf
+# x convert sysLOG_facility integer to proper string?
+# x [almost required] chunked gelf handler would be nice. use ChunkedGelf class
+# - [nice to have] rabbitmq handler
+# x support command line args for graylog host/port
+# - get rid of remaining debug prints and commented blocks
+# - mit license.
+# - readme
+
+
+
+class JournalToGelf:
+
+    facility_names = {
+        0:   "kern",
+        1:   "user",
+        2:   "mail",
+        3:   "daemon",
+        4:   "auth",
+        5:   "syslog",
+        6:   "lpr",
+        7:   "news",
+        8:   "uucp",
+        9:   "cron",
+        10:  "authpriv",
+        16:  "local0",
+        17:  "local1",
+        18:  "local2",
+        19:  "local3",
+        20:  "local4",
+        21:  "local5",
+        22:  "local6",
+        23:  "local7"
+    }
+
+    def __init__(self, fp, host='localhost', port=12201):
+        self.buf = deque()
+        self.fp = fp
+        self.gelf = graypy.GELFHandler(host, port)
+
+    def _send_gelf(self):
+        try:
+            msg = {'version': '1.0'}
+            record = json.loads(''.join(self.buf))
+            for key, value in record.iteritems():
+                # journalctl's JSON exporter will convert unprintable (incl. newlines)
+                # strings into an array of integers. We convert these integers into
+                # their ascii representation and concatenate them together
+                # to reconstitute the string.
+                if type(value) is list:
+                    print "D: value '%s' is a list, interpreting it" % value
+                    value = ''.join([chr(x) for x in value])
+                    print "D: new value '%s'" % value
+
+                if key == '__REALTIME_TIMESTAMP':
+                    msg['timestamp'] = float(value) / (1000 * 1000)
+                elif key == 'PRIORITY':
+                    msg['level'] = int(value)
+                elif key == 'SYSLOG_FACILITY':
+                    msg['facility'] = self.facility_names[int(value)]
+                elif key == '_HOSTNAME':
+                    msg['host'] = value
+                elif key == 'MESSAGE':
+                    msg['short_message'] = value
+                elif key.startswith('.'):
+                    continue
+                elif key == '__CURSOR':
+                    continue
+                else:
+                    # prefix additional fields with '_' for graylog.
+                    msg['_' + key] = value
+            self.gelf.send(zlib.compress(json.dumps(msg)))
+        except ValueError:
+            print "Warning: invalid JSON. Skipping this record."
+        finally:
+            self.buf.clear()
+
+    def run(self):
+        for line in self.fp:
+            line = line.strip()
+            # line = self.fp.readline().strip()
+
+            # the first line of `journalctl -o json -f` will not be valid json,
+            # it will be "Logs being at ....". Skip it.
+            if line.startswith('Logs begin at'):
+                continue
+
+            # The second line will be the opening bracket for a list, but we
+            # don't need that either. Skip it.
+            if line.startswith('['):
+                continue
+
+            if line == "},":
+                print "D: end of record"
+                self.buf.append('}')
+                self._send_gelf()
+            else:
+                print "D: got a line: '%s'" % line
+                self.buf.append(line)
+
+
+if __name__ == '__main__':
+    import optparse
+
+    opts_parser = optparse.OptionParser()
+    opts_parser.add_option('-s', '--server', dest='host', default='localhost',
+                            help='Graylog2 server host or IP (default: %default)')
+    opts_parser.add_option('-p', '--port', dest='port', default=12201, type='int',
+                            help='Graylog2 server port (default: %default)')
+    (opts, args) = opts_parser.parse_args()
+
+    parser = JournalToGelf(fp=sys.stdin, host=opts.host, port=opts.port)
+    parser.run()
