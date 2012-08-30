@@ -4,12 +4,23 @@ journal2gelf
 Get structured log records from the systemd journal and send them to a
 Graylog2 server as GELF messages.
 
-Tested on Python 2.7, may work on other versions.
+Tested on Python 2.7 and Fedora 17 (systemd-44-17).
 
 Dependencies:
 -------------
 
 - graypy (pip-install graypy)
+
+Install
+-------
+
+On Fedora 17+ (or other systems with a version of systemd that includes journal
+support):
+
+```
+sudo yum install git python-pip
+pip-python install git+http://github.com/systemd/journal2gelf.git#egg=journal2gelf
+```
 
 Usage:
 ------
