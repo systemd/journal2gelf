@@ -1,0 +1,12 @@
+# put this in /etc/systemd/system
+
+[Unit]
+Description=Journald to GELF (graylog) log relay service
+
+[Service]
+ExecStart=/bin/journal2gelf -h localhost -p 12201 -t
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

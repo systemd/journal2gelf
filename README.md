@@ -1,15 +1,17 @@
 journal2gelf
 ============
 
-Get structured log records from the systemd journal and send them to a
+Export structured log records from the systemd journal and send them to a
 Graylog2 server as GELF messages.
 
 Tested on Python 2.7 and Fedora 17 (systemd-44-17).
 
+
 Dependencies:
 -------------
 
-- graypy (pip-install graypy)
+- graypy
+
 
 Install
 -------
@@ -22,14 +24,32 @@ sudo yum install git python-pip
 pip-python install git+http://github.com/systemd/journal2gelf.git#egg=journal2gelf
 ```
 
+Running as a service
+--------------------
+
+Copy and edit the included `examples/journal2gelf.service` to
+`/etc/systemd/system`.
+
 Usage:
 ------
 
-- Send all logs in the journal to graylog then exit:
-  `systemd-journalctl -o json | journal2gelf.py`
+By default, journal2gelf will look for input on stdin. eg:
 
-- Continuously tail the journal and send logs to graylog:
-  `systemd-journalctl -o json -f | journal2gelf.py`
+- Send all logs and exit:
+
+    journalctl -o json | journal2gelf
+
+The `-t` flag can be specified and journal2gelf will automatically
+start journalctl in tail mode. This makes it easier to run as a systemd service.
+
+    journal2gelf -t
+
+This is equivalent to running:
+
+    journalctl -o json -f | journal2gelf
+
+Graylog2 server and port can be specified with `-h` and `-p` flags.
+
 
 License
 -------

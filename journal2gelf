@@ -15,11 +15,21 @@
 # Usage:
 # ------
 #
-# - Send all logs and exit:
-#   `systemd-journalctl -o json | journal2gelf.py`
+# By default, journal2gelf will look for input on stdin. eg:
 #
-# - To tail the journal and send logs:
-#   `systemd-journalctl -o json -f | journal2gelf.py`
+# - Send all logs and exit:
+#
+#   `journalctl -o json | journal2gelf`
+#
+# The `-t` flag can be specified and journal2gelf will automatically
+# start journalctl in tail mode. This makes it easier to run as a systemd service.
+#
+#   `journal2gelf -t`
+#
+# This is equivalent to running:
+#
+#   `journalctl -o json -f | journal2gelf`
+#
 #
 # Copyright 2012 Joe Miller <https://github.com/joemiller>
 #
@@ -39,9 +49,8 @@ from collections import deque
 # x [almost required] chunked gelf handler would be nice. use ChunkedGelf class
 # - [nice to have] rabbitmq handler
 # x support command line args for graylog host/port
-# - get rid of remaining debug prints and commented blocks
-# - mit license.
-# - readme
+# x mit license.
+# x readme
 
 
 
@@ -84,11 +93,11 @@ class JournalToGelf:
                 # their ascii representation and concatenate them together
                 # to reconstitute the string.
                 if type(value) is list:
-                    print "D: value '%s' is a list, interpreting it" % value
                     value = ''.join([chr(x) for x in value])
-                    print "D: new value '%s'" % value
 
                 if key == '__REALTIME_TIMESTAMP':
+                    # convert from systemd's format of microseconds expressed as
+                    # an integer to graylog's float format, eg: "seconds.microseconds"
                     msg['timestamp'] = float(value) / (1000 * 1000)
                 elif key == 'PRIORITY':
                     msg['level'] = int(value)
@@ -114,7 +123,6 @@ class JournalToGelf:
     def run(self):
         for line in self.fp:
             line = line.strip()
-            # line = self.fp.readline().strip()
 
             # the first line of `journalctl -o json -f` will not be valid json,
             # it will be "Logs being at ....". Skip it.
@@ -127,23 +135,31 @@ class JournalToGelf:
                 continue
 
             if line == "},":
-                print "D: end of record"
                 self.buf.append('}')
                 self._send_gelf()
             else:
-                print "D: got a line: '%s'" % line
                 self.buf.append(line)
 
 
 if __name__ == '__main__':
     import optparse
+    import subprocess
 
     opts_parser = optparse.OptionParser()
     opts_parser.add_option('-s', '--server', dest='host', default='localhost',
                             help='Graylog2 server host or IP (default: %default)')
     opts_parser.add_option('-p', '--port', dest='port', default=12201, type='int',
                             help='Graylog2 server port (default: %default)')
+    opts_parser.add_option('-t', '--tail', dest='tail', default=False, action='store_true',
+                            help='Start journalctl and tail it forever (default: %default)')
     (opts, args) = opts_parser.parse_args()
 
-    parser = JournalToGelf(fp=sys.stdin, host=opts.host, port=opts.port)
+    read_from_fd = None
+    if opts.tail:
+        read_from_fd = subprocess.Popen(['journalctl', '-o', 'json', '-f'],
+                                        stdout=subprocess.PIPE).stdout
+    else:
+        read_from_fd = sys.stdin
+
+    parser = JournalToGelf(fp=read_from_fd, host=opts.host, port=opts.port)
     parser.run()
