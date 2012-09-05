@@ -48,7 +48,7 @@ This is equivalent to running:
 
     journalctl -o json -f | journal2gelf
 
-Graylog2 server and port can be specified with `-h` and `-p` flags.
+Graylog2 server and port can be specified with `-s` and `-p` flags.
 
 
 License
