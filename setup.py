@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='journal2gelf',
-    version='0.0.1',
+    version='0.0.2',
     author='Joe Miller',
     author_email='joeym@joeym.net',
     scripts=['journal2gelf'],
