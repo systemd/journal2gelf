@@ -102,7 +102,7 @@ class JournalToGelf:
                 elif key == 'PRIORITY':
                     msg['level'] = int(value)
                 elif key == 'SYSLOG_FACILITY':
-                    msg['facility'] = self.facility_names[int(value)]
+                    msg['facility'] = self.facility_names.get(int(value), 'unknown')
                 elif key == '_HOSTNAME':
                     msg['host'] = value
                 elif key == 'MESSAGE':
