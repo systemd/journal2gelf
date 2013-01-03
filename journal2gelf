@@ -44,15 +44,7 @@ import graypy
 from collections import deque
 
 # TODO:
-# x convert time properly for gelf
-# x convert sysLOG_facility integer to proper string?
-# x [almost required] chunked gelf handler would be nice. use ChunkedGelf class
 # - [nice to have] rabbitmq handler
-# x support command line args for graylog host/port
-# x mit license.
-# x readme
-
-
 
 class JournalToGelf:
 
