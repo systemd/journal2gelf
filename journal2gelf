@@ -8,6 +8,10 @@
 #
 # Tested on Python 2.7, may work on other versions.
 #
+# journald / systemd compatibility
+# --------------------------------
+# For systemd < 190, use '-m' switch to enable multi-line JSON parsing.
+#
 # Dependencies:
 # -------------
 # - graypy (pip-install graypy)
@@ -70,9 +74,10 @@ class JournalToGelf:
         23:  "local7"
     }
 
-    def __init__(self, fp, host='localhost', port=12201):
+    def __init__(self, fp, host='localhost', port=12201, multiline_format=False):
         self.buf = deque()
         self.fp = fp
+        self.multiline_format = multiline_format
         self.gelf = graypy.GELFHandler(host, port)
 
     def _send_gelf(self):
@@ -116,21 +121,28 @@ class JournalToGelf:
         for line in self.fp:
             line = line.strip()
 
-            # the first line of `journalctl -o json -f` will not be valid json,
-            # it will be "Logs being at ....". Skip it.
-            if line.startswith('Logs begin at'):
-                continue
-
-            # The second line will be the opening bracket for a list, but we
-            # don't need that either. Skip it.
-            if line.startswith('['):
-                continue
-
-            if line == "},":
-                self.buf.append('}')
+            # systemd > 190 switched to a single-line JSON format for each
+            # journal event that is much similar to parse.
+            if not self.multiline_format:
+                self.buf.append(line)
                 self._send_gelf()
             else:
-                self.buf.append(line)
+                # systemd < 190 used a multi-line JSON format which requires more work to parse.
+                # the first line of `journalctl -o json -f` will not be valid json,
+                # it will be "Logs being at ....". Skip it.
+                if line.startswith('Logs begin at'):
+                    continue
+
+                # The second line will be the opening bracket for a list, but we
+                # don't need that either. Skip it.
+                if line.startswith('['):
+                    continue
+
+                if line == "},":
+                    self.buf.append('}')
+                    self._send_gelf()
+                else:
+                    self.buf.append(line)
 
 
 if __name__ == '__main__':
@@ -144,6 +156,8 @@ if __name__ == '__main__':
                             help='Graylog2 server port (default: %default)')
     opts_parser.add_option('-t', '--tail', dest='tail', default=False, action='store_true',
                             help='Start journalctl and tail it forever (default: %default)')
+    opts_parser.add_option('-m', '--multiline-format', dest='multiline_format', default=False, action='store_true',
+                            help='Expect multi-line JSON format (systemd version < 190) (default: %default))')
     (opts, args) = opts_parser.parse_args()
 
     read_from_fd = None
@@ -153,5 +167,5 @@ if __name__ == '__main__':
     else:
         read_from_fd = sys.stdin
 
-    parser = JournalToGelf(fp=read_from_fd, host=opts.host, port=opts.port)
+    parser = JournalToGelf(fp=read_from_fd, host=opts.host, port=opts.port, multiline_format=opts.multiline_format)
     parser.run()

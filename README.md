@@ -4,8 +4,17 @@ journal2gelf
 Export structured log records from the systemd journal and send them to a
 Graylog2 server as GELF messages.
 
-Tested on Python 2.7 and Fedora 17 (systemd-44-17).
+Tested on Python 2.7 and Fedora 17 (systemd-44-17) and Fedora 19 (systemd-204).
 
+journalctl output format change
+-------------------------------
+
+Starting with systemd-190 journalctl switched to an easier to parse single-line
+JSON format. This is now the default expected format as of journal2gelf v0.0.3.
+
+For versions of systemd < 190, you must add the `-m` switch.
+
+Run `journalctl --version` to get the systemd version.
 
 Dependencies:
 -------------
